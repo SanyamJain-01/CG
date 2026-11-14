@@ -26,7 +26,7 @@ import org.springframework.context.annotation.Import;
 
 /** The REST API over real HTTP, against a real Postgres. The worker is driven by hand to keep tests deterministic. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"cg.worker.enabled=false", "cg.storage-dir=${java.io.tmpdir}/cg-api-test"})
+        properties = {"cg.worker.enabled=false", "cg.scanners.enabled=false", "cg.storage-dir=${java.io.tmpdir}/cg-api-test"})
 @Import(TestcontainersConfiguration.class)
 class ApiTests {
 
@@ -56,6 +56,11 @@ class ApiTests {
 
         HttpResponse<String> list = send(get("/api/scans", token));
         assertThat(list.body()).contains(id);
+
+        HttpResponse<String> findings = send(get("/api/scans/" + id + "/findings", token));
+        assertThat(findings.statusCode()).isEqualTo(200);
+        assertThat(findings.body()).contains("\"total\":0");
+        assertThat(upload.headers().firstValue("Location")).hasValue("/api/scans/" + id);
     }
 
     @Test
@@ -77,6 +82,7 @@ class ApiTests {
         String id = field(upload(alice, "repo.zip", zip(z -> z.file("app.py", "x = 1"))).body(), "id");
 
         assertThat(send(get("/api/scans/" + id, bob)).statusCode()).isEqualTo(404);
+        assertThat(send(get("/api/scans/" + id + "/findings", bob)).statusCode()).isEqualTo(404);
         assertThat(send(delete("/api/scans/" + id, bob)).statusCode()).isEqualTo(404);
         assertThat(send(get("/api/scans", bob)).body()).doesNotContain(id);
 

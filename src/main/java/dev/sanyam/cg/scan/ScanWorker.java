@@ -1,14 +1,20 @@
 package dev.sanyam.cg.scan;
 
+import dev.sanyam.cg.analysis.AnalysisResult;
+import dev.sanyam.cg.analysis.Evidence;
+import dev.sanyam.cg.analysis.Scanners;
 import dev.sanyam.cg.archive.ArchiveException;
 import dev.sanyam.cg.archive.ExtractResult;
 import dev.sanyam.cg.archive.SafeExtractor;
+import dev.sanyam.cg.finding.Finding;
+import dev.sanyam.cg.finding.FindingRepository;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -37,13 +43,18 @@ public class ScanWorker {
     private final ScanRepository scans;
     private final ScanStorage storage;
     private final SafeExtractor extractor;
+    private final Scanners scanners;
+    private final FindingRepository findings;
     private final TransactionTemplate tx;
     private final ScheduledExecutorService heartbeats = Executors.newSingleThreadScheduledExecutor();
 
-    public ScanWorker(ScanRepository scans, ScanStorage storage, SafeExtractor extractor, TransactionTemplate tx) {
+    public ScanWorker(ScanRepository scans, ScanStorage storage, SafeExtractor extractor, Scanners scanners,
+                      FindingRepository findings, TransactionTemplate tx) {
         this.scans = scans;
         this.storage = storage;
         this.extractor = extractor;
+        this.scanners = scanners;
+        this.findings = findings;
         this.tx = tx;
     }
 
@@ -81,9 +92,15 @@ public class ScanWorker {
             FileSystemUtils.deleteRecursively(work);  // leftovers from a crashed attempt
             Files.createDirectories(work);
             ExtractResult result = extractor.extract(storage.archivePath(id), work);
-            // M4: run the scanners and the LLM on `work` here
-            finish(id, scan -> scan.succeed(result.filesWritten()));
-            log.info("scan.finished id={} files={} skipped={}", id, result.filesWritten(), result.filesSkipped());
+            AnalysisResult analysis = scanners.scan(work);
+            List<Evidence.Draft> drafts = Evidence.attach(analysis.findings(), work);  // before work is deleted
+            String toolErrors = analysis.errors().isEmpty() ? null : String.join("; ", analysis.errors());
+            finish(id, scan -> {
+                scan.succeed(result.filesWritten(), toolErrors);
+                findings.saveAll(drafts.stream().map(d -> new Finding(scan, d)).toList());
+            });
+            log.info("scan.finished id={} files={} findings={} tool_errors={}", id, result.filesWritten(),
+                    drafts.size(), toolErrors);
         } catch (ArchiveException e) {
             finish(id, scan -> scan.fail(e.getCode(), e.getMessage()));
             log.info("scan.rejected id={} code={}", id, e.getCode());

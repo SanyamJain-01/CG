@@ -44,6 +44,10 @@ public class Scan {
     @Column(name = "error_detail", columnDefinition = "text")
     private String errorDetail;
 
+    /** Scanners that couldn't run, e.g. "semgrep: not installed". The scan still succeeds with the others. */
+    @Column(name = "tool_errors", columnDefinition = "text")
+    private String toolErrors;
+
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamptz")
     private OffsetDateTime createdAt;
 
@@ -78,8 +82,9 @@ public class Scan {
         heartbeatAt = startedAt;
     }
 
-    public void succeed(int fileCount) {
+    public void succeed(int fileCount, String toolErrors) {
         this.fileCount = fileCount;
+        this.toolErrors = toolErrors;
         finish(ScanStatus.SUCCEEDED);
     }
 
@@ -102,6 +107,7 @@ public class Scan {
     public Integer getFileCount() { return fileCount; }
     public String getErrorCode() { return errorCode; }
     public String getErrorDetail() { return errorDetail; }
+    public String getToolErrors() { return toolErrors; }
     public String getArchiveSha256() { return archiveSha256; }
     public Long getArchiveBytes() { return archiveBytes; }
     public OffsetDateTime getHeartbeatAt() { return heartbeatAt; }

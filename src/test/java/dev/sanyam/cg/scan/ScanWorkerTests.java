@@ -2,10 +2,18 @@ package dev.sanyam.cg.scan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import dev.sanyam.cg.TestcontainersConfiguration;
+import dev.sanyam.cg.analysis.AnalysisResult;
+import dev.sanyam.cg.analysis.RawFinding;
+import dev.sanyam.cg.analysis.Scanners;
 import dev.sanyam.cg.archive.ArchiveException;
 import dev.sanyam.cg.archive.TestZips;
+import dev.sanyam.cg.finding.Finding;
+import dev.sanyam.cg.finding.FindingRepository;
+import dev.sanyam.cg.finding.Severity;
 import dev.sanyam.cg.user.User;
 import dev.sanyam.cg.user.UserRepository;
 import java.io.ByteArrayInputStream;
@@ -15,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -28,9 +37,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Upload, queue and worker against a real Postgres. The scheduler is off: tests call the worker themselves. */
+/**
+ * Upload, queue and worker against a real Postgres. The scheduler is off (tests call the worker themselves) and the
+ * scanners are mocked, so these tests are fast and work offline; RealScannersTests covers the real tools.
+ */
 @SpringBootTest(properties = {"cg.worker.enabled=false", "cg.storage-dir=${java.io.tmpdir}/cg-test"})
 @Import(TestcontainersConfiguration.class)
 class ScanWorkerTests {
@@ -42,6 +55,8 @@ class ScanWorkerTests {
     @Autowired UserRepository users;
     @Autowired JdbcTemplate jdbc;
     @Autowired TransactionTemplate tx;
+    @Autowired FindingRepository findings;
+    @MockitoBean Scanners scanners;
 
     @TempDir Path tmp;
     User user;
@@ -51,6 +66,24 @@ class ScanWorkerTests {
         jdbc.update("DELETE FROM scans");
         jdbc.update("DELETE FROM users");
         user = users.save(new User("dev@example.com", "hash"));
+        when(scanners.scan(any())).thenReturn(AnalysisResult.empty());
+    }
+
+    @Test
+    void findingsAreSavedWithTheirCodeAndToolErrorsAreRecorded() throws IOException {
+        when(scanners.scan(any())).thenReturn(new AnalysisResult(
+                List.of(new RawFinding("bandit", "B602", Severity.HIGH, "app.py", 2, 2, "shell=True")),
+                List.of("semgrep: not installed")));
+        Scan queued = submit(TestZips.create(tmp.resolve("a.zip")).file("app.py", "import subprocess\nsubprocess.call(c, shell=True)\n"));
+
+        worker.processNext();
+
+        Scan done = reload(queued);
+        assertThat(done.getStatus()).isEqualTo(ScanStatus.SUCCEEDED);  // one missing tool doesn't fail the scan
+        assertThat(done.getToolErrors()).isEqualTo("semgrep: not installed");
+        List<Finding> saved = findings.findByScan_Id(done.getId());
+        assertThat(saved).hasSize(1);
+        assertThat(saved.getFirst().getSnippet()).contains("shell=True");  // evidence kept after files are deleted
     }
 
     @Test

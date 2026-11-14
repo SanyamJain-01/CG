@@ -5,9 +5,9 @@ import dev.sanyam.cg.security.RateLimiter;
 import dev.sanyam.cg.security.TokenService;
 import dev.sanyam.cg.user.User;
 import dev.sanyam.cg.user.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -16,6 +16,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -55,8 +57,9 @@ class ScanController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<ScanResponse> upload(@AuthenticationPrincipal Jwt jwt, @RequestParam("file") MultipartFile file)
-            throws IOException {
+    @ResponseStatus(HttpStatus.ACCEPTED)  // also tells the Swagger docs the real status
+    ScanResponse upload(@AuthenticationPrincipal Jwt jwt, @RequestParam("file") MultipartFile file,
+                        HttpServletResponse response) throws IOException {
         UUID userId = TokenService.userId(jwt);
         String key = "upload:" + userId;
         long wait = limiter.retryAfter(key, MAX_UPLOADS, UPLOAD_WINDOW);
@@ -70,7 +73,8 @@ class ScanController {
                     HttpStatus.UNAUTHORIZED, "token_invalid", "This account no longer exists."));
             scan = service.submit(user, file.getOriginalFilename(), in);
         }
-        return ResponseEntity.accepted().location(URI.create("/api/scans/" + scan.getId())).body(ScanResponse.from(scan));
+        response.setHeader(HttpHeaders.LOCATION, "/api/scans/" + scan.getId());
+        return ScanResponse.from(scan);
     }
 
     /** Newest first. Pass the returned nextCursor as "before" to get the next page. */
