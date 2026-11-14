@@ -13,3 +13,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # stay on the Java 21 LTS line; moving to the next LTS is a deliberate change, not a weekly bump
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
