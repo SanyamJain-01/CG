@@ -3,9 +3,14 @@ package dev.sanyam.cg.scan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 import dev.sanyam.cg.TestcontainersConfiguration;
+import dev.sanyam.cg.ai.AiExplanation;
+import dev.sanyam.cg.ai.AiExplanationRepository;
+import dev.sanyam.cg.ai.LlmClient;
+import dev.sanyam.cg.ai.LlmStatus;
 import dev.sanyam.cg.analysis.AnalysisResult;
 import dev.sanyam.cg.analysis.RawFinding;
 import dev.sanyam.cg.analysis.Scanners;
@@ -57,6 +62,8 @@ class ScanWorkerTests {
     @Autowired TransactionTemplate tx;
     @Autowired FindingRepository findings;
     @MockitoBean Scanners scanners;
+    @MockitoBean LlmClient llm;  // not configured unless a test says so
+    @Autowired AiExplanationRepository explanations;
 
     @TempDir Path tmp;
     User user;
@@ -84,6 +91,45 @@ class ScanWorkerTests {
         List<Finding> saved = findings.findByScan_Id(done.getId());
         assertThat(saved).hasSize(1);
         assertThat(saved.getFirst().getSnippet()).contains("shell=True");  // evidence kept after files are deleted
+        assertThat(done.getLlmStatus()).isEqualTo(LlmStatus.SKIPPED);  // no API key: scan is complete without AI
+    }
+
+    @Test
+    void explanationsAreSavedSeparatelyAndLinkedToTheirFinding() throws IOException {
+        when(scanners.scan(any())).thenReturn(new AnalysisResult(
+                List.of(new RawFinding("bandit", "B602", Severity.HIGH, "app.py", 1, 1, "shell=True")), List.of()));
+        when(llm.isConfigured()).thenReturn(true);
+        when(llm.model()).thenReturn("test-model");
+        when(llm.complete(anyList())).thenReturn(
+                "{\"items\":[{\"id\":1,\"risk\":\"Command injection.\",\"fix\":\"Use a list.\",\"likely_false_positive\":false}]}");
+        Scan queued = submit(TestZips.create(tmp.resolve("a.zip")).file("app.py", "subprocess.call(c, shell=True)\n"));
+
+        worker.processNext();
+
+        Scan done = reload(queued);
+        assertThat(done.getLlmStatus()).isEqualTo(LlmStatus.DONE);
+        List<AiExplanation> saved = explanations.findByFinding_Scan_Id(done.getId());
+        assertThat(saved).hasSize(1);
+        assertThat(saved.getFirst().getModel()).isEqualTo("test-model");
+        assertThat(saved.getFirst().getRisk()).isEqualTo("Command injection.");
+        assertThat(saved.getFirst().getFindingId()).isEqualTo(findings.findByScan_Id(done.getId()).getFirst().getId());
+    }
+
+    @Test
+    void llmFailureStillCompletesTheScan() throws IOException {
+        when(scanners.scan(any())).thenReturn(new AnalysisResult(
+                List.of(new RawFinding("bandit", "B602", Severity.HIGH, "app.py", 1, 1, "shell=True")), List.of()));
+        when(llm.isConfigured()).thenReturn(true);
+        when(llm.complete(anyList())).thenThrow(new dev.sanyam.cg.ai.LlmException("HTTP 429"));
+        Scan queued = submit(TestZips.create(tmp.resolve("a.zip")).file("app.py", "x = 1\n"));
+
+        worker.processNext();
+
+        Scan done = reload(queued);
+        assertThat(done.getStatus()).isEqualTo(ScanStatus.SUCCEEDED);
+        assertThat(done.getLlmStatus()).isEqualTo(LlmStatus.FAILED);
+        assertThat(done.getToolErrors()).isEqualTo("llm: HTTP 429");
+        assertThat(findings.findByScan_Id(done.getId())).hasSize(1);  // scanner findings are kept regardless
     }
 
     @Test

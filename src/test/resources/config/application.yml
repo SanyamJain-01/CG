@@ -2,3 +2,5 @@
 cg:
   jwt:
     secret: test-only-secret-that-is-long-enough-for-hs256
+  llm:
+    api-key: ""   # tests never call a real LLM; ExplainerTests and ScanWorkerTests use a mock

@@ -18,6 +18,10 @@ spring:
 cg:
   jwt:
     secret: ${JWT_SECRET:}
+  llm:   # optional: without a key, scans still run and findings simply have no AI explanation
+    base-url: ${LLM_BASE_URL:https://api.groq.com/openai/v1}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:openai/gpt-oss-120b}
 management:
   endpoints:
     web:

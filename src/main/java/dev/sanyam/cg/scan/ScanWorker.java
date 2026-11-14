@@ -1,5 +1,8 @@
 package dev.sanyam.cg.scan;
 
+import dev.sanyam.cg.ai.AiExplanation;
+import dev.sanyam.cg.ai.AiExplanationRepository;
+import dev.sanyam.cg.ai.Explainer;
 import dev.sanyam.cg.analysis.AnalysisResult;
 import dev.sanyam.cg.analysis.Evidence;
 import dev.sanyam.cg.analysis.Scanners;
@@ -14,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -45,16 +49,21 @@ public class ScanWorker {
     private final SafeExtractor extractor;
     private final Scanners scanners;
     private final FindingRepository findings;
+    private final Explainer explainer;
+    private final AiExplanationRepository explanations;
     private final TransactionTemplate tx;
     private final ScheduledExecutorService heartbeats = Executors.newSingleThreadScheduledExecutor();
 
     public ScanWorker(ScanRepository scans, ScanStorage storage, SafeExtractor extractor, Scanners scanners,
-                      FindingRepository findings, TransactionTemplate tx) {
+                      FindingRepository findings, Explainer explainer, AiExplanationRepository explanations,
+                      TransactionTemplate tx) {
         this.scans = scans;
         this.storage = storage;
         this.extractor = extractor;
         this.scanners = scanners;
         this.findings = findings;
+        this.explainer = explainer;
+        this.explanations = explanations;
         this.tx = tx;
     }
 
@@ -94,13 +103,23 @@ public class ScanWorker {
             ExtractResult result = extractor.extract(storage.archivePath(id), work);
             AnalysisResult analysis = scanners.scan(work);
             List<Evidence.Draft> drafts = Evidence.attach(analysis.findings(), work);  // before work is deleted
-            String toolErrors = analysis.errors().isEmpty() ? null : String.join("; ", analysis.errors());
+            Explainer.Result ai = explainer.explain(drafts);  // network call, outside any transaction
+            List<String> problems = new ArrayList<>(analysis.errors());
+            if (ai.error() != null) {
+                problems.add("llm: " + ai.error());
+            }
+            String toolErrors = problems.isEmpty() ? null : String.join("; ", problems);
+            // findings and their explanations are saved together, so a scan is never half-finished
             finish(id, scan -> {
-                scan.succeed(result.filesWritten(), toolErrors);
-                findings.saveAll(drafts.stream().map(d -> new Finding(scan, d)).toList());
+                scan.succeed(result.filesWritten(), toolErrors, ai.status());
+                List<Finding> saved = findings.saveAll(drafts.stream().map(d -> new Finding(scan, d)).toList());
+                List<AiExplanation> notes = new ArrayList<>();
+                ai.notes().forEach((index, note) ->
+                        notes.add(new AiExplanation(saved.get(index), note, ai.model(), Explainer.PROMPT_VERSION)));
+                explanations.saveAll(notes);
             });
-            log.info("scan.finished id={} files={} findings={} tool_errors={}", id, result.filesWritten(),
-                    drafts.size(), toolErrors);
+            log.info("scan.finished id={} files={} findings={} explained={} llm={} tool_errors={}", id,
+                    result.filesWritten(), drafts.size(), ai.notes().size(), ai.status(), toolErrors);
         } catch (ArchiveException e) {
             finish(id, scan -> scan.fail(e.getCode(), e.getMessage()));
             log.info("scan.rejected id={} code={}", id, e.getCode());

@@ -1,5 +1,6 @@
 package dev.sanyam.cg.scan;
 
+import dev.sanyam.cg.ai.LlmStatus;
 import dev.sanyam.cg.user.User;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -48,6 +49,10 @@ public class Scan {
     @Column(name = "tool_errors", columnDefinition = "text")
     private String toolErrors;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "llm_status", columnDefinition = "text")
+    private LlmStatus llmStatus;
+
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamptz")
     private OffsetDateTime createdAt;
 
@@ -82,9 +87,10 @@ public class Scan {
         heartbeatAt = startedAt;
     }
 
-    public void succeed(int fileCount, String toolErrors) {
+    public void succeed(int fileCount, String toolErrors, LlmStatus llmStatus) {
         this.fileCount = fileCount;
         this.toolErrors = toolErrors;
+        this.llmStatus = llmStatus;
         finish(ScanStatus.SUCCEEDED);
     }
 
@@ -108,6 +114,7 @@ public class Scan {
     public String getErrorCode() { return errorCode; }
     public String getErrorDetail() { return errorDetail; }
     public String getToolErrors() { return toolErrors; }
+    public LlmStatus getLlmStatus() { return llmStatus; }
     public String getArchiveSha256() { return archiveSha256; }
     public Long getArchiveBytes() { return archiveBytes; }
     public OffsetDateTime getHeartbeatAt() { return heartbeatAt; }
