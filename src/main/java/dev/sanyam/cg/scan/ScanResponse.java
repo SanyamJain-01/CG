@@ -1,6 +1,7 @@
 package dev.sanyam.cg.scan;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 
@@ -13,7 +14,12 @@ public record ScanResponse(
 
     public static ScanResponse from(Scan s) {
         return new ScanResponse(s.getId(), s.getFilename(), s.getStatus(), s.getFileCount(), s.getAttempts(),
-                s.getErrorCode(), s.getErrorDetail(), s.getCreatedAt(), s.getStartedAt(), s.getFinishedAt(),
-                Map.of("self", "/api/scans/" + s.getId()));
+                s.getErrorCode(), s.getErrorDetail(), utc(s.getCreatedAt()), utc(s.getStartedAt()),
+                utc(s.getFinishedAt()), Map.of("self", "/api/scans/" + s.getId()));
+    }
+
+    /** Always UTC in the API, whatever time zone the server or database uses. */
+    private static OffsetDateTime utc(OffsetDateTime t) {
+        return t == null ? null : t.withOffsetSameInstant(ZoneOffset.UTC);
     }
 }
