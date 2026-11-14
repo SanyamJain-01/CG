@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# the workflow's token can read the code and nothing else
+permissions:
+  contents: read
+
+env:
+  SEMGREP_VERSION: "1.185.0"
+  BANDIT_VERSION: "1.9.4"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # actions are pinned to full commit SHAs: a tag like v7 can be moved to other code by whoever controls it
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install the scanners (same pinned versions as the Docker image)
+        run: |
+          pipx install "semgrep==${SEMGREP_VERSION}"
+          pipx install "bandit==${BANDIT_VERSION}"
+          curl -sSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          sudo tar xzf gitleaks.tar.gz -C /usr/local/bin gitleaks
+          semgrep --version && bandit --version && gitleaks version
+
+      # Testcontainers starts a real Postgres in the runner's Docker
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Fail if the real-scanner test was skipped
+        run: grep -q 'skipped="0"' target/surefire-reports/TEST-dev.sanyam.cg.analysis.RealScannersTests.xml
+
+  image:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the production image
+        run: docker build -t cg:ci .
+      - name: Check the scanners work inside the image, as the non-root user
+        run: |
+          docker run --rm --entrypoint sh cg:ci -c \
+            'test "$(id -u)" != 0 && semgrep --version && bandit --version && gitleaks version'

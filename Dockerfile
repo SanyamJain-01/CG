@@ -17,8 +17,10 @@ RUN python3 -m venv /opt/semgrep && /opt/semgrep/bin/pip install --no-cache-dir 
  && python3 -m venv /opt/bandit && /opt/bandit/bin/pip install --no-cache-dir bandit==1.9.4 \
  && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep \
  && ln -s /opt/bandit/bin/bandit /usr/local/bin/bandit
-RUN curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
-    | tar xz -C /usr/local/bin gitleaks \
+# the download is checked against the checksum Gitleaks publishes, so a tampered file fails the build
+RUN curl -sSL -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+ && echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz" | sha256sum -c - \
+ && tar xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks && rm /tmp/gitleaks.tar.gz \
  && semgrep --version && bandit --version && gitleaks version   # fail the build if any scanner is broken
 
 # uploaded code is untrusted: the app and its scanners never run as root
