@@ -1,5 +1,5 @@
 # ---- build: compile and package the app (tests run in CI, not here) ----
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:24-jdk AS build
 WORKDIR /src
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
@@ -8,7 +8,7 @@ COPY src src
 RUN ./mvnw -q -B -DskipTests package && cp target/cg-*.jar /app.jar
 
 # ---- run: JRE + the three scanners, no build tools ----
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
