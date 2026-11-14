@@ -65,6 +65,11 @@ public class Scan {
         this.createdAt = OffsetDateTime.now();
     }
 
+    public void attachArchive(String sha256, long bytes) {
+        this.archiveSha256 = sha256;
+        this.archiveBytes = bytes;
+    }
+
     /** The worker picked this scan up. The database rejects a 4th attempt (CHECK attempts <= 3). */
     public void startAttempt() {
         attempts++;
@@ -96,6 +101,10 @@ public class Scan {
     public int getAttempts() { return attempts; }
     public Integer getFileCount() { return fileCount; }
     public String getErrorCode() { return errorCode; }
+    public String getErrorDetail() { return errorDetail; }
+    public String getArchiveSha256() { return archiveSha256; }
+    public Long getArchiveBytes() { return archiveBytes; }
+    public OffsetDateTime getHeartbeatAt() { return heartbeatAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getStartedAt() { return startedAt; }
     public OffsetDateTime getFinishedAt() { return finishedAt; }
