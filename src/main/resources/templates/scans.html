@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments :: head('Scans', false)}"></head>
+<body>
+<header th:replace="~{fragments :: header(${email})}"></header>
+<main>
+  <section class="card">
+    <h2>Scan a project</h2>
+    <p class="hint">Upload a .zip of source code, up to 20 MB. Files are scanned, never run, and deleted after the scan.</p>
+    <p class="notice error" th:if="${error}" th:text="${error}">Upload error</p>
+    <form class="upload" th:action="@{/scans}" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".zip,application/zip" required>
+      <button class="primary" type="submit">Upload and scan</button>
+    </form>
+  </section>
+
+  <h2>Your scans</h2>
+  <p class="hint" th:if="${#lists.isEmpty(scans)}">No scans yet.</p>
+  <table class="list" th:unless="${#lists.isEmpty(scans)}">
+    <thead><tr><th>File</th><th>Status</th><th>Findings</th><th>Uploaded (UTC)</th></tr></thead>
+    <tbody>
+    <tr th:each="s : ${scans}">
+      <td><a th:href="@{/scans/{id}(id=${s.id()})}" th:text="${s.filename()}">repo.zip</a></td>
+      <td><span class="status" th:classappend="${#strings.toLowerCase(s.status().name())}" th:text="${s.status().name()}">QUEUED</span></td>
+      <td><span th:replace="~{fragments :: counts(${counts[s.id().toString()]})}"></span></td>
+      <td th:text="${#temporals.format(s.createdAt(), 'yyyy-MM-dd HH:mm')}">2026-11-14 12:00</td>
+    </tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

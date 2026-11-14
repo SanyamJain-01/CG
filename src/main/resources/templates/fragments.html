@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:fragment="head(title, refresh)">
+  <meta charset="utf-8">
+  <meta th:if="${refresh}" http-equiv="refresh" content="3">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title} + ' · CG'">CG</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header th:fragment="header(email)" class="topbar">
+  <a class="brand" th:href="@{/}">CG <span>code security scans</span></a>
+  <div class="who">
+    <span th:text="${email}">me@example.com</span>
+    <form th:action="@{/logout}" method="post"><button class="link" type="submit">Log out</button></form>
+  </div>
+</header>
+<span th:fragment="counts(c)" class="counts">
+  <span class="badge high" th:text="${c['HIGH']} + ' high'">0 high</span>
+  <span class="badge medium" th:text="${c['MEDIUM']} + ' medium'">0 medium</span>
+  <span class="badge low" th:text="${c['LOW']} + ' low'">0 low</span>
+</span>
+</body>
+</html>

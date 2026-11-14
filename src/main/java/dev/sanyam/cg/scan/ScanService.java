@@ -1,21 +1,40 @@
 package dev.sanyam.cg.scan;
 
+import dev.sanyam.cg.api.ApiException;
 import dev.sanyam.cg.archive.ArchiveException;
+import dev.sanyam.cg.security.RateLimiter;
 import dev.sanyam.cg.user.User;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.Locale;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ScanService {
 
+    static final int MAX_UPLOADS = 10;
+    static final Duration UPLOAD_WINDOW = Duration.ofHours(1);
+
     private final ScanRepository scans;
     private final ScanStorage storage;
+    private final RateLimiter limiter;
 
-    public ScanService(ScanRepository scans, ScanStorage storage) {
+    public ScanService(ScanRepository scans, ScanStorage storage, RateLimiter limiter) {
         this.scans = scans;
         this.storage = storage;
+        this.limiter = limiter;
+    }
+
+    /** 10 uploads per user per hour, shared by the API and the dashboard. Counts this upload. */
+    public void checkUploadLimit(UUID userId) {
+        String key = "upload:" + userId;
+        long wait = limiter.retryAfter(key, MAX_UPLOADS, UPLOAD_WINDOW);
+        if (wait > 0) {
+            throw ApiException.rateLimited(wait);
+        }
+        limiter.record(key, UPLOAD_WINDOW);
     }
 
     /** Stores the upload and queues a scan. The worker does the slow part, so this returns quickly. */

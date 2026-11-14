@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments :: head('Not found', false)}"></head>
+<body>
+<main class="narrow">
+  <h1>Not found</h1>
+  <p th:text="${message}">No scan with that id.</p>
+  <p><a th:href="@{/}">← Back to your scans</a></p>
+</main>
+</body>
+</html>

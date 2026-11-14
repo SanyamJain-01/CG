@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments :: head(${scan.filename()}, ${inProgress})}"></head>
+<body>
+<header class="topbar"><a class="brand" th:href="@{/}">CG <span>code security scans</span></a></header>
+<main>
+  <p><a th:href="@{/}">← All scans</a></p>
+  <h1 th:text="${scan.filename()}">repo.zip</h1>
+  <p class="meta">
+    <span class="status" th:classappend="${#strings.toLowerCase(scan.status().name())}" th:text="${scan.status().name()}">SUCCEEDED</span>
+    <span th:if="${scan.fileCount() != null}" th:text="${scan.fileCount()} + ' files scanned'">2 files scanned</span>
+    <span th:replace="~{fragments :: counts(${counts})}"></span>
+  </p>
+  <p class="notice" th:if="${inProgress}">Scanning… this page refreshes every 3 seconds.</p>
+  <p class="notice error" th:if="${scan.errorCode() != null}" th:text="${scan.errorDetail()} + ' (' + ${scan.errorCode()} + ')'">Rejected</p>
+  <p class="notice warn" th:if="${scan.toolErrors() != null}" th:text="'Not everything ran: ' + ${scan.toolErrors()}">Not run</p>
+  <p class="hint" th:if="${!inProgress and scan.errorCode() == null and #lists.isEmpty(findings)}">No issues found in the scanned files.</p>
+
+  <article class="finding" th:each="f : ${findings}"
+           th:classappend="${f.aiExplanation() != null and f.aiExplanation().likelyFalsePositive()} ? 'dimmed'">
+    <header>
+      <span class="badge" th:classappend="${#strings.toLowerCase(f.source().severity().name())}" th:text="${f.source().severity().name()}">HIGH</span>
+      <code class="where" th:text="${f.location().file()} + ':' + ${f.location().startLine()}">app.py:3</code>
+      <span class="rule" th:text="${f.source().tool()} + ' / ' + ${f.source().ruleId()}">semgrep / rule</span>
+    </header>
+    <p class="scanner-message" th:text="${f.evidence().message()}">Scanner message</p>
+    <pre class="snippet"><code th:text="${f.evidence().snippet()}">code</code></pre>
+    <aside class="ai" th:if="${f.aiExplanation() != null}">
+      <p class="ai-label">
+        <strong>AI explanation</strong>
+        <span th:text="${f.aiExplanation().generatedBy()} + ', prompt v' + ${f.aiExplanation().promptVersion()}">model</span>
+      </p>
+      <p class="fp" th:if="${f.aiExplanation().likelyFalsePositive()}">Likely a false positive. Still shown so you can judge.</p>
+      <p><strong>Risk:</strong> <span th:text="${f.aiExplanation().risk()}">risk</span></p>
+      <p><strong>Fix:</strong> <span th:text="${f.aiExplanation().fix()}">fix</span></p>
+      <p class="hint" th:text="${disclaimer}">AI-generated, may be wrong.</p>
+    </aside>
+  </article>
+
+  <form class="danger-zone" th:action="@{/scans/{id}/delete(id=${scan.id()})}" method="post">
+    <button class="danger" type="submit">Delete this scan</button>
+  </form>
+</main>
+</body>
+</html>

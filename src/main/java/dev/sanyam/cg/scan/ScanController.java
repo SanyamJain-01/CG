@@ -1,14 +1,12 @@
 package dev.sanyam.cg.scan;
 
 import dev.sanyam.cg.api.ApiException;
-import dev.sanyam.cg.security.RateLimiter;
 import dev.sanyam.cg.security.TokenService;
 import dev.sanyam.cg.user.User;
 import dev.sanyam.cg.user.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -35,9 +33,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/scans")
 class ScanController {
 
-    static final int MAX_UPLOADS = 10;
-    static final Duration UPLOAD_WINDOW = Duration.ofHours(1);
-
     public record ScanPage(List<ScanResponse> items, OffsetDateTime nextCursor) {
     }
 
@@ -45,15 +40,12 @@ class ScanController {
     private final ScanRepository scans;
     private final ScanStorage storage;
     private final UserRepository users;
-    private final RateLimiter limiter;
 
-    ScanController(ScanService service, ScanRepository scans, ScanStorage storage, UserRepository users,
-                   RateLimiter limiter) {
+    ScanController(ScanService service, ScanRepository scans, ScanStorage storage, UserRepository users) {
         this.service = service;
         this.scans = scans;
         this.storage = storage;
         this.users = users;
-        this.limiter = limiter;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -61,12 +53,7 @@ class ScanController {
     ScanResponse upload(@AuthenticationPrincipal Jwt jwt, @RequestParam("file") MultipartFile file,
                         HttpServletResponse response) throws IOException {
         UUID userId = TokenService.userId(jwt);
-        String key = "upload:" + userId;
-        long wait = limiter.retryAfter(key, MAX_UPLOADS, UPLOAD_WINDOW);
-        if (wait > 0) {
-            throw ApiException.rateLimited(wait);
-        }
-        limiter.record(key, UPLOAD_WINDOW);
+        service.checkUploadLimit(userId);
         Scan scan;
         try (InputStream in = file.getInputStream()) {
             User user = users.findById(userId).orElseThrow(() -> new ApiException(

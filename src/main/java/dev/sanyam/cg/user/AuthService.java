@@ -43,7 +43,13 @@ public class AuthService {
         }
     }
 
+    /** Issues an API token after checking the password. */
     public String login(String email, String password) {
+        return tokens.issue(authenticate(email, password));
+    }
+
+    /** Checks email and password, with the wrong-password rate limit. Used by the API and the dashboard. */
+    public User authenticate(String email, String password) {
         String normalized = normalize(email);
         String key = "login:" + normalized;
         long wait = limiter.retryAfter(key, MAX_FAILED_LOGINS, LOGIN_WINDOW);
@@ -58,7 +64,7 @@ public class AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "Email or password is wrong.");
         }
         limiter.reset(key);
-        return tokens.issue(user.get());
+        return user.get();
     }
 
     /** Emails are stored lower-case, so lookups never depend on how the user typed them. */
