@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,8 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
     List<Scan> findTop20ByUser_IdOrderByCreatedAtDesc(UUID userId);
 
     Optional<Scan> findByIdAndUser_Id(UUID id, UUID userId);
+
+    List<Scan> findByUser_IdAndCreatedAtBeforeOrderByCreatedAtDesc(UUID userId, OffsetDateTime before, Limit limit);
 
     /**
      * Locks the oldest scan that needs work: queued, or running with a heartbeat older than staleBefore (its worker

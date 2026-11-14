@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: "optional:file:./.env.properties"   # local secrets, git-ignored
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/cg}
     username: ${DATABASE_USER:cg}
@@ -9,6 +11,13 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      max-file-size: 25MB      # above the 20 MB app limit, so users get CG's own error message
+      max-request-size: 25MB
+cg:
+  jwt:
+    secret: ${JWT_SECRET:}
 management:
   endpoints:
     web:
@@ -16,4 +25,4 @@ management:
         include: health
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized   # public callers only see UP or DOWN

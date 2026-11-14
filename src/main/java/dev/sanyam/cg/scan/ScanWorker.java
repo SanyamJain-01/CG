@@ -97,7 +97,8 @@ public class ScanWorker {
     }
 
     private void finish(UUID id, Consumer<Scan> outcome) {
-        tx.executeWithoutResult(status -> outcome.accept(scans.findById(id).orElseThrow()));
+        // the user may have deleted the scan while it ran; then there is nothing left to update
+        tx.executeWithoutResult(status -> scans.findById(id).ifPresent(outcome));
         storage.deleteArchive(id);  // only after a final result; a crash keeps it for the retry
     }
 

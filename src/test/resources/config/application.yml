@@ -1,0 +1,4 @@
+# Loaded only by tests, on top of src/main/resources/application.yml
+cg:
+  jwt:
+    secret: test-only-secret-that-is-long-enough-for-hs256
