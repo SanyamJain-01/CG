@@ -1,3 +1,5 @@
+server:
+  port: ${PORT:8080}   # hosting platforms set PORT
 spring:
   config:
     import: "optional:file:./.env.properties"   # local secrets, git-ignored
@@ -22,6 +24,8 @@ cg:
     base-url: ${LLM_BASE_URL:https://api.groq.com/openai/v1}
     api-key: ${LLM_API_KEY:}
     model: ${LLM_MODEL:openai/gpt-oss-120b}
+  scanners:
+    semgrep-config: ${SEMGREP_CONFIG:p/default}   # a registry rule pack (needs network) or a rules file path
 management:
   endpoints:
     web:

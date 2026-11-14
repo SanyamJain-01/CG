@@ -1,3 +1,4 @@
+# Local full stack: `docker compose up --build` runs the app exactly as it runs in production.
 services:
   db:
     image: postgres:17
@@ -9,5 +10,26 @@ services:
       - "5433:5432"
     volumes:
       - cgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cg"]
+      interval: 2s
+      retries: 15
+
+  app:
+    build: .
+    profiles: ["app"]          # `docker compose up` alone still starts only the database, as before
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/cg
+      DATABASE_USER: cg
+      DATABASE_PASSWORD: cg
+    volumes:
+      - ./.env.properties:/home/cg/.env.properties:ro   # JWT secret and LLM key, never baked into the image
+    ports:
+      - "8080:8080"
+    mem_limit: 512m            # same memory as the free hosting tier, so problems show up here first
+
 volumes:
   cgdata:

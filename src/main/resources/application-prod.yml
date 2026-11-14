@@ -1,0 +1,16 @@
+# Active in the Docker image (SPRING_PROFILES_ACTIVE=prod). Everything secret still comes from environment variables.
+server:
+  forward-headers-strategy: framework   # the host terminates HTTPS; trust its X-Forwarded-* so redirects stay https
+  servlet:
+    session:
+      cookie:
+        secure: true                     # session cookie only ever sent over HTTPS
+        http-only: true
+        same-site: lax
+  tomcat:
+    threads:
+      max: 20                            # small instance: fewer threads, less memory
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5               # free Postgres tiers allow few connections
