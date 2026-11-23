@@ -34,7 +34,7 @@ public class Scanners {
     private final boolean enabled;
 
     public Scanners(ObjectMapper json,
-                    @Value("${cg.scanners.semgrep-config:p/python}") String semgrepConfig,
+                    @Value("${cg.scanners.semgrep-config:p/default}") String semgrepConfig,
                     @Value("${cg.scanners.enabled:true}") boolean enabled) {
         this.json = json;
         // a rules file on disk is used as an absolute path (scanners run inside the scan folder);
@@ -69,6 +69,8 @@ public class Scanners {
         } catch (Exception e) {
             String reason = e instanceof IOException && String.valueOf(e.getMessage()).contains("Cannot run program")
                     ? "not installed" : e.getClass().getSimpleName() + ": " + e.getMessage();
+            // users see this text: show paths relative to the upload, never the server's own folders
+            reason = reason.replace(root.toAbsolutePath().normalize().toString(), ".");
             errors.add((name + ": " + reason).substring(0, Math.min(200, name.length() + 2 + reason.length())));
             log.warn("scanner.failed tool={} reason={}", name, reason);
         }

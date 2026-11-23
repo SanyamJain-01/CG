@@ -98,6 +98,11 @@ public class ScanWorker {
                 HEARTBEAT_EVERY.toSeconds(), HEARTBEAT_EVERY.toSeconds(), TimeUnit.SECONDS);
         Path work = storage.workDir(id);
         try {
+            if (!Files.isRegularFile(storage.archivePath(id))) {
+                // hosts with temporary disks (Render's free tier) lose uploads on restart; say so instead of "damaged"
+                throw new ArchiveException("upload_lost",
+                        "The uploaded file was lost when the server restarted. Please upload it again.");
+            }
             FileSystemUtils.deleteRecursively(work);  // leftovers from a crashed attempt
             Files.createDirectories(work);
             ExtractResult result = extractor.extract(storage.archivePath(id), work);

@@ -173,6 +173,18 @@ class ScanWorkerTests {
     }
 
     @Test
+    void uploadLostInARestartFailsWithAClearCode() throws IOException {
+        Scan queued = submit(TestZips.create(tmp.resolve("a.zip")).file("app.py", "x = 1"));
+        Files.delete(storage.archivePath(queued.getId()));  // what a temporary disk does on restart
+
+        worker.processNext();
+
+        Scan done = reload(queued);
+        assertThat(done.getStatus()).isEqualTo(ScanStatus.FAILED);
+        assertThat(done.getErrorCode()).isEqualTo("upload_lost");  // not "invalid_archive", which blames the user
+    }
+
+    @Test
     void retriesStopAfterThreeAttempts() throws IOException {
         Scan queued = submit(TestZips.create(tmp.resolve("a.zip")).file("app.py", "x = 1"));
         simulateCrashedAttempt(queued.getId(), 3);

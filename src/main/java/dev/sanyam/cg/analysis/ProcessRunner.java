@@ -44,6 +44,8 @@ final class ProcessRunner {
             env.put("LC_ALL", "C.UTF-8");
             Process process = builder.start();
             if (!process.waitFor(timeout.toSeconds(), TimeUnit.SECONDS)) {
+                // children first: Semgrep starts semgrep-core, which would keep running if only the parent died
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
                 process.destroyForcibly();
                 throw new ScannerException("timed out after " + timeout.toSeconds() + " s");
             }
