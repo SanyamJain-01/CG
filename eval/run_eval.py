@@ -232,6 +232,19 @@ class Api:
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read() or b"null")
 
+    def wait_ready(self, limit_seconds=600):
+        """Waits until /actuator/health says UP: a container that just started, or a sleeping free-tier app."""
+        deadline = time.time() + limit_seconds
+        while time.time() < deadline:
+            try:
+                if self.call("GET", "/actuator/health")[1].get("status") == "UP":
+                    return
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                pass  # not listening yet
+            print("waiting for CG to start...")
+            time.sleep(10)
+        sys.exit(f"CG at {self.base} did not become healthy in {limit_seconds} s")
+
     def login(self, email, password):
         status, body = self.call("POST", "/api/auth/login", {"email": email, "password": password})
         if status == 401:
@@ -344,6 +357,7 @@ def main():
     if not email or not password:
         sys.exit("set CG_EVAL_EMAIL and CG_EVAL_PASSWORD (password: 12+ characters)")
     api = Api(a.url)
+    api.wait_ready()
     api.login(email, password)
     runs = []
     for i in range(a.runs):
