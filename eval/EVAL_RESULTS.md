@@ -13,8 +13,8 @@
 - The LLM labelled **2 of 4** noise findings as likely false positives and wrongly dismissed **0** real vulnerabilities.
 - Findings pointing at a missing file or an impossible line: 0. Duplicates on the same line: 0.
 - Missed vulnerabilities: none.
-- Scan time (worker start to finish, all samples): 10 s, 8 s, 4 s.
-- Tool errors: none.
-- LLM label consistency across runs: not measurable
+- Scan time (worker start to finish, all samples): 7 s, 9 s, 8 s.
+- LLM status per run: DONE, DONE, DONE; tool errors per run: none, none, none.
+- LLM label consistency across runs: 100% of 16 findings explained in every run where the LLM ran
 
 Limits: small, textbook Python samples with one vulnerability each. This shows the pipeline works and what the LLM labels change, not how CG performs on large real-world code. LLM cost is not measured: CG does not record token usage.

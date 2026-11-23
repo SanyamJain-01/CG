@@ -311,11 +311,12 @@ def report(runs, url):
              f"Duplicates on the same line: {m['duplicates']}.",
              f"- Missed vulnerabilities: {', '.join(l['missed']) or 'none'}.",
              "- Scan time (worker start to finish, all samples): " + ", ".join(f"{r['seconds']:.0f} s" for r in runs) + ".",
-             f"- Tool errors: {m['tool_errors'] or 'none'}."]
+             "- LLM status per run: " + ", ".join(r["llm_status"] for r in runs) + "; tool errors per run: "
+             + ", ".join(r["tool_errors"] or "none" for r in runs) + "."]
     if len(runs) > 1:
-        c = consistency(runs)
+        c = consistency([r for r in runs if r["llm_status"] == "DONE"] or runs)
         lines.append(f"- LLM label consistency across runs: "
-                     + (f"{c[0]:.0%} of {c[1]} findings explained in every run" if c else "not measurable"))
+                     + (f"{c[0]:.0%} of {c[1]} findings explained in every run where the LLM ran" if c else "not measurable"))
     if m["llm_status"] != "DONE":
         lines.append("\n**The LLM did not run, so the LLM column equals the scanner column.**")
     lines += ["", "Limits: small, textbook Python samples with one vulnerability each. This shows the pipeline works "
@@ -349,6 +350,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--url", default="http://localhost:8080")
     p.add_argument("--runs", type=int, default=1)
+    p.add_argument("--pause", type=int, default=90, help="seconds between runs (default 90)")
     p.add_argument("--selftest", action="store_true")
     a = p.parse_args()
     if a.selftest:
@@ -361,8 +363,12 @@ def main():
     api.login(email, password)
     runs = []
     for i in range(a.runs):
+        if i:
+            time.sleep(a.pause)  # free LLM tiers limit requests per minute; back-to-back runs get HTTP 429
         runs.append(run_once(api))
-        print(f"run {i + 1}: {runs[-1]['findings']} findings in {runs[-1]['seconds']:.0f} s")
+        r = runs[-1]
+        print(f"run {i + 1}: {r['findings']} findings in {r['seconds']:.0f} s, llm {r['llm_status']}"
+              + (f" ({r['tool_errors']})" if r['tool_errors'] else ""))
     text = report(runs, a.url)
     out = Path(__file__).with_name("EVAL_RESULTS.md")
     out.write_text(text)
